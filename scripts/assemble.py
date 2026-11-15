@@ -20,7 +20,8 @@ Without --live the repository holds this run's packages only. --list
 prints what the live repository publishes, one "<suite> <package>
 <version> <architecture>" per line, after the same checks, and stops.
 
---sign signs the Release files (InRelease and Release.gpg) with the key of
+Every Release file is valid for REPO_VALID_DAYS (config/repo.conf) from now
+(Valid-Until). --sign signs the Release files (InRelease and Release.gpg) with the key of
 config/repo.conf from the gpg home directory in GNUPGHOME.
 
 Writes the repository to --out: pool/, dists/<suite>/, the public key as
@@ -299,6 +300,9 @@ def main():
         shutil.copyfile(src, out / dst)
         os.chmod(out / dst, 0o644)
 
+    # REPO_VALID_SECONDS in the environment replaces it, for the workflow's
+    # check that apt and check-apt.sh refuse a short-lived or expired repository.
+    valid_seconds = int(os.environ.get("REPO_VALID_SECONDS") or int(c["REPO_VALID_DAYS"]) * 86400)
     arch = c["REPO_ARCHITECTURES"]
     comp = c["REPO_COMPONENT"]
     changed = False
@@ -351,6 +355,7 @@ def main():
             f'APT::FTPArchive::Release::Components "{comp}";',
             f'APT::FTPArchive::Release::Description "Roxora packages for Ubuntu {s}";',
             'APT::FTPArchive::Release::Acquire-By-Hash "yes";',
+            f'APT::FTPArchive::Release::ValidTime "{valid_seconds}";',
             'APT::FTPArchive::Release::MD5 "false";',
             'APT::FTPArchive::Release::SHA1 "false";',
             'APT::FTPArchive::Release::SHA256 "true";',

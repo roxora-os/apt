@@ -61,8 +61,8 @@ hand and on a `repository_dispatch` (`hwtool-release`, `build-release`):
    package a `roxora-*` package with its candidate from this repository,
    the keyring, hwtool and the wallpapers installed, every package resolved
    against the Ubuntu archive.
-6. A run on `main` deploys to Pages when the packages or the top-level
-   files changed, and the same containers then check the published URL.
+6. A run on `main` deploys to Pages, every time (see Valid-Until below),
+   and the same containers then check the published URL.
 
 New hwtool and Roxora releases are picked up by the hourly run, so nothing
 needs to be done here for them. To publish at once, run the workflow by
@@ -83,12 +83,44 @@ component, `beta`, of the same suites: a system that wants betas adds
 change, because it matches on the repository's host. That component is not
 built yet.
 
+## Valid-Until, and when publishing stops
+
+Each Release file says until when it is valid: 10 days after the run that
+signed it (`REPO_VALID_DAYS` in `config/repo.conf`). Every run from `main`
+signs and deploys again, with a new `Date` and `Valid-Until`, also when no
+package changed, so with the hourly schedule the files are never more than
+about an hour old. A replayed old Release file (an attacker or a stale
+mirror holding back updates) stops working after 10 days. After every
+deploy, `scripts/check-apt.sh` on the live URL fails if the files are valid
+for less than 7 more days; each run also checks that a repository valid for
+5 days, and one that has expired, are refused.
+
+If no run deploys for more than 10 days, the files expire. `apt update`
+then stops with an error for this source, on every Roxora system:
+
+    E: Release file for https://roxora-os.github.io/apt/dists/noble/InRelease is expired (invalid since ...). Updates for this repository will not be applied.
+
+Ubuntu's and Armbian's sources still update; Roxora's packages do not, and
+apt exits non-zero, which can stop scripts and unattended jobs that run
+`apt update`. Recovery is on this side only: run the Publish workflow
+(Actions, Publish, Run workflow, or `gh workflow run publish.yml -R
+roxora-os/apt`); once it is deployed, the next `apt update` on each system
+works again, nothing has to be done there. Things that stop the schedule:
+GitHub turns scheduled workflows off in a repository without a commit for
+60 days (the runs themselves do not count), Actions being turned off, or the
+`APT_SIGNING_KEY` secret going missing. Turn the workflow on again (Actions,
+Publish, Enable workflow) and run it. A user who cannot wait can skip the
+check for one update: `sudo apt -o Acquire::Check-Valid-Until=false update`.
+
+The key itself is valid until 2031-11-14; it has to be extended (and
+`roxora-archive-keyring` published again) before then.
+
 ## Signing key
 
 Ed25519, `Roxora apt <oss@gahingwoo.com>`, fingerprint
 `07353CCFAF21725418E3CE4798FC2BE6A9A8952D`, valid until 2031-11-14. The
 public key is `keys/roxora-archive-keyring.asc`; the secret key is only in
-the `APT_SIGNING_KEY` secret. The Release files carry no `Valid-Until`.
+the `APT_SIGNING_KEY` secret.
 
 ## Building locally
 
