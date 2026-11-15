@@ -70,8 +70,13 @@ for p in "${pkgs[@]}"; do
 		echo "check-apt.sh: ${p} is not a Roxora package" >&2
 		exit 1
 	}
-	cand="$(apt-cache policy "${p}" | awk '/Candidate:/ { print $2 }')"
-	apt-cache madison "${p}" | awk -F' [|] ' -v v="${cand}" '$2 == v { print $3 }' | grep -q "${uri#*://}" || {
+	# The sources of the candidate version, from its lines in the version table.
+	apt-cache policy "${p}" | awk '
+		/^  Candidate:/ { cand = $2; next }
+		/^ \*\*\* / { invers = ($2 == cand); next }
+		/^     [^ ]/ { invers = ($1 == cand); next }
+		/^        / && invers { print }
+	' | grep -qF "${uri#*://}" || {
 		apt-cache policy "${p}"
 		echo "check-apt.sh: the candidate of ${p} is not from ${uri}" >&2
 		exit 1
