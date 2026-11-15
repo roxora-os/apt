@@ -1,0 +1,184 @@
+# Assembles Roxora's apt repository, checks it in clean Ubuntu containers and
+# publishes it on GitHub Pages at https://roxora-os.github.io/apt.
+#
+# Runs on every push to main, by hand, every hour (to pick up new releases of
+# hwtool and of the build repository; see README.md) and on a
+# repository_dispatch. A run deploys only when the packages or the top-level
+# files differ from what is published, and only from main.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      build_ref:
+        description: Also build the release packages of this branch, tag or commit of roxora-os/build (test only; such a run is never deployed)
+        type: string
+        default: ""
+  schedule:
+    - cron: "17 * * * *"
+  repository_dispatch:
+    types: [hwtool-release, build-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REPO_URL: https://roxora-os.github.io/apt
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.assemble.outputs.changed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends apt-utils xz-utils gpgv > /dev/null
+          apt-ftparchive --version | head -1
+
+      - name: What the live repository publishes
+        run: |
+          python3 scripts/assemble.py --list --live "${REPO_URL}" | tee published.txt
+
+      - name: Build and fetch the packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUILD_REF: ${{ inputs.build_ref }}
+        run: |
+          mkdir -p debs/all
+          packages/keyring/build.sh debs/all
+          packages/wallpapers/build.sh debs/all
+          scripts/fetch-hwtool.py debs/all
+          scripts/fetch-release-packages.sh debs published.txt
+          if [[ -n "${BUILD_REF}" ]]; then
+            scripts/fetch-release-packages.sh debs published.txt "${BUILD_REF}"
+          fi
+          find debs -name '*.deb' | sort
+
+      - name: Import the signing key
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+          FPR: "07353CCFAF21725418E3CE4798FC2BE6A9A8952D"
+        run: |
+          # A throwaway gpg home in the runner's temporary directory, removed
+          # with the runner. The key is never printed.
+          GNUPGHOME="$(mktemp -d -p "${RUNNER_TEMP}")"
+          chmod 700 "${GNUPGHOME}"
+          echo "GNUPGHOME=${GNUPGHOME}" >> "$GITHUB_ENV"
+          [[ -n "${APT_SIGNING_KEY}" ]] || { echo "::error::APT_SIGNING_KEY is not available to this run"; exit 1; }
+          printf '%s\n' "${APT_SIGNING_KEY}" | gpg --homedir "${GNUPGHOME}" --batch --quiet --import 2> /dev/null
+          grep -q "^REPO_KEY_FINGERPRINT=${FPR}$" config/repo.conf
+          have="$(gpg --homedir "${GNUPGHOME}" --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          [[ "${have}" == "${FPR}" ]] || { echo "::error::the secret key is not ${FPR}"; exit 1; }
+          echo "secret key ${have} imported"
+
+      - id: assemble
+        name: Assemble and sign
+        run: |
+          set -o pipefail
+          python3 scripts/assemble.py --debs debs --out repo --live "${REPO_URL}" --sign | tee assemble.log
+          grep -E '^changed=(true|false)$' assemble.log >> "$GITHUB_OUTPUT"
+          rm -rf "${GNUPGHOME}"
+          find repo -type f | sort
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: repo
+
+  # The repository as a clean Ubuntu system sees it, before it is deployed:
+  # apt-get update with the signature checked (gpgv on 24.04, Sequoia's sqv
+  # on 26.04), the packages installed or resolved.
+  check:
+    needs: assemble
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "ubuntu:26.04"]
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: /tmp/pages
+      - name: Check with apt
+        run: |
+          mkdir /srv/repo
+          tar -xf /tmp/pages/artifact.tar -C /srv/repo
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends gnupg > /dev/null
+          # The key from this repository, not the copy in the artifact.
+          gpg --batch --dearmor < keys/roxora-archive-keyring.asc > /tmp/roxora-archive-keyring.gpg
+          cmp /tmp/roxora-archive-keyring.gpg /srv/repo/roxora-archive-keyring.gpg
+          bash scripts/check-apt.sh file:/srv/repo /tmp/roxora-archive-keyring.gpg
+
+  deploy:
+    needs: [assemble, check]
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.build_ref == '' && needs.assemble.outputs.changed == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  # The published repository, from clean containers: after a deploy, and on
+  # the runs that had nothing to deploy (except for pull requests). GitHub
+  # Pages can serve the old files for a few minutes after a deploy, so this
+  # first waits for the new InRelease.
+  live:
+    needs: [assemble, check, deploy]
+    if: ${{ !cancelled() && needs.check.result == 'success' && (needs.deploy.result == 'success' || (needs.deploy.result == 'skipped' && github.event_name != 'pull_request')) }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "ubuntu:26.04"]
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: /tmp/pages
+      - name: Check the published repository with apt
+        env:
+          DEPLOYED: ${{ needs.deploy.result == 'success' }}
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends gnupg ca-certificates curl > /dev/null
+          gpg --batch --dearmor < keys/roxora-archive-keyring.asc > /tmp/roxora-archive-keyring.gpg
+          mkdir /tmp/deployed
+          tar -xf /tmp/pages/artifact.tar -C /tmp/deployed
+          . /etc/os-release
+          for i in $(seq 1 20); do
+            [[ "${DEPLOYED}" == true ]] || break
+            if curl -fsSL "${REPO_URL}/dists/${VERSION_CODENAME}/InRelease" | cmp -s - "/tmp/deployed/dists/${VERSION_CODENAME}/InRelease"; then
+              echo "the published InRelease is this run's"
+              break
+            fi
+            [[ "${i}" == 20 ]] && { echo "::error::${REPO_URL} still serves another InRelease"; exit 1; }
+            sleep 30
+          done
+          bash scripts/check-apt.sh "${REPO_URL}" /tmp/roxora-archive-keyring.gpg
