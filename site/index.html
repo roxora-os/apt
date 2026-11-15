@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roxora apt repository</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+pre { background: #f2f4f5; padding: 0.75rem; overflow-x: auto; }
+code { font-size: 0.95em; }
+</style>
+</head>
+<body>
+<h1>Roxora apt repository</h1>
+<p>This is the apt repository of <a href="https://roxora-os.github.io">Roxora</a>.
+It holds Roxora's own packages for installed Roxora systems: hwtool, the
+wallpapers, the release packages that bring a system to the state of each new
+Roxora release, and the repository's key. Ubuntu's packages come from the
+Ubuntu archive, and the kernel and firmware from Armbian's repository, as
+before.</p>
+
+<p>Images from Roxora 2026.11.5 on have this repository set up. For older
+images, and for what an update to a new release does, see
+<a href="https://github.com/roxora-os/build/blob/main/docs/install.md#updating-to-a-new-roxora-release">Updating to a new Roxora release</a>.</p>
+
+<h2>Suites</h2>
+<ul>
+<li><code>noble</code>: Ubuntu 24.04</li>
+<li><code>resolute</code>: Ubuntu 26.04</li>
+</ul>
+<p>One component, <code>main</code>, for arm64.</p>
+
+<h2>Signing key</h2>
+<p>The Release files are signed with the key
+<code>0735 3CCF AF21 7254 18E3 CE47 98FC 2BE6 A9A8 952D</code>
+(Ed25519, "Roxora apt", valid until 2031-11-14):
+<a href="roxora-archive-keyring.asc">roxora-archive-keyring.asc</a>,
+or as a binary keyring for <code>Signed-By</code>:
+<a href="roxora-archive-keyring.gpg">roxora-archive-keyring.gpg</a>.
+The package <code>roxora-archive-keyring</code> installs it as
+<code>/usr/share/keyrings/roxora-archive-keyring.gpg</code>.</p>
+
+<p>Source and workflow: <a href="https://github.com/roxora-os/apt">roxora-os/apt</a>.</p>
+</body>
+</html>
