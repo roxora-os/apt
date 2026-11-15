@@ -56,7 +56,10 @@ grep -E "^(Get|Hit):.*${uri#*://}.*InRelease" /tmp/update.log > /dev/null || {
 
 # apt names its list files after the URI without the scheme, "/" as "_".
 lists="$(echo "${uri#*:}" | sed 's|^/*||; s|/*$||; s|/|_|g')"
-mapfile -t pkgs < <(cat /var/lib/apt/lists/*"${lists}_dists_${codename}_main_binary-arm64_Packages" | awk '/^Package:/ { print $2 }' | sort -u)
+# Docker's Ubuntu images keep the lists compressed; apt-helper reads either.
+mapfile -t pkgs < <(for f in /var/lib/apt/lists/*"${lists}_dists_${codename}_main_binary-arm64_Packages"*; do
+	/usr/lib/apt/apt-helper cat-file "${f}"
+done | awk '/^Package:/ { print $2 }' | sort -u)
 [[ ${#pkgs[@]} -gt 0 ]] || {
 	echo "check-apt.sh: no packages in ${codename}" >&2
 	exit 1
