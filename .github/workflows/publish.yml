@@ -98,6 +98,12 @@ jobs:
           REPO_VALID_SECONDS=1 python3 scripts/assemble.py --debs debs --out negative/expired --live "${REPO_URL}" --sign > /dev/null
           rm -rf "${GNUPGHOME}"
           find repo -type f | sort
+          # GitHub Pages publishes at most 1 GB (README.md, Size).
+          size="$(du -sb repo | cut -f1)"
+          echo "repository: $((size / 1000000)) MB"
+          if ((size > 700000000)); then
+            echo "::warning::the repository is $((size / 1000000)) MB; GitHub Pages publishes at most 1 GB (README.md, Size)"
+          fi
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:

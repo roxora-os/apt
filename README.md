@@ -80,6 +80,17 @@ a manual run turns it on again.
 repository whose release packages are built as well; such a run checks the
 result and is never deployed.
 
+## Size
+
+GitHub Pages publishes a site of at most 1 GB, with a soft limit of 100 GB
+of downloads a month. Nothing is ever removed from this repository, and
+each version of `roxora-imager` adds about 170 MB (the other packages
+together are a few MB), so it has room for about five of them. Each run
+writes the size of the repository to its log, with a warning from 700 MB
+on. Past 1 GB the deploy may fail, and if no run deploys for 10 days the
+Release files expire (see below). Before that, older versions of
+`roxora-imager` have to be removed, or its package has to get smaller.
+
 ## Betas
 
 Only releases reach this repository. Beta release packages (a build tag
