@@ -48,8 +48,9 @@ hand and on a `repository_dispatch` (`hwtool-release`, `build-release`):
    each suite, checked against `keys/roxora-archive-keyring.asc`.
 2. The packages are built and fetched as in the table. Release packages are
    built only for releases the repository does not publish yet.
-3. `scripts/assemble.py` downloads every published package file, checks it
-   against the published index, and adds this run's packages. A package
+3. `scripts/assemble.py` takes every published package file, from the
+   Actions cache of earlier runs or else downloaded, checks it against the
+   published index, and adds this run's packages. A package
    whose name, version and architecture are published already must have
    the same content (control data, files, modes): a published version never
    changes, and a different package under the same version stops the run.
@@ -90,6 +91,13 @@ writes the size of the repository to its log, with a warning from 700 MB
 on. Past 1 GB the deploy may fail, and if no run deploys for 10 days the
 Release files expire (see below). Before that, older versions of
 `roxora-imager` have to be removed, or its package has to get smaller.
+
+The hourly run itself downloads little from Pages: the published package
+files are kept in the Actions cache between runs (a cached file is used
+only when it matches the signed index), the list of what is published
+reads only the indexes, and the expired and short-lived repositories of
+the checks hold only the keyring. Every desktop image build downloads
+`roxora-imager` once.
 
 ## Betas
 

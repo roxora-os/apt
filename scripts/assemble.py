@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Ga Hing Woo <gahing@gahingwoo.com>
 """Assemble Roxora's apt repository.
 
-    scripts/assemble.py --debs DIR --out DIR [--live URL] [--sign]
+    scripts/assemble.py --debs DIR --out DIR [--live URL [--cache DIR]] [--sign]
     scripts/assemble.py --list --live URL
 
 --debs holds the packages built or fetched for this run: DIR/all/*.deb go
@@ -18,7 +18,13 @@ architecture the live repository already has must have the same content;
 if it differs the run stops, because a published version never changes.
 Without --live the repository holds this run's packages only. --list
 prints what the live repository publishes, one "<suite> <package>
-<version> <architecture>" per line, after the same checks, and stops.
+<version> <architecture>" per line, after the same checks of its indexes,
+and stops; it downloads no package files.
+
+--cache is a directory that keeps the live repository's package files from
+one run to the next, by their pool path. A file there is used when it
+matches the published index, so a run downloads only the files it does not
+have yet (GitHub Pages has a monthly download limit, see README.md).
 
 Every Release file is valid for REPO_VALID_DAYS (config/repo.conf) from now
 (Valid-Until). --sign signs the Release files (InRelease and Release.gpg) with the key of
@@ -137,9 +143,9 @@ class Keyring:
         return out.read_text()
 
 
-def live_state(url, suites, keyring, work):
-    """{suite: [stanza, ...]} of the live repository, its package files
-    downloaded to work/live and checked."""
+def live_state(url, suites, keyring, work, packages=True, cache=None):
+    """{suite: [stanza, ...]} of the live repository; with packages, its
+    package files in work/live, from cache or downloaded, and checked."""
     state = {}
     for suite in suites:
         data = fetch(f"{url}/dists/{suite}/InRelease")
@@ -185,15 +191,24 @@ def live_state(url, suites, keyring, work):
         if entries is None:
             state[suite] = []
             continue
+        if not packages:
+            continue
         for e in entries:
             dst = work / "live" / e["Filename"]
             if dst.exists():
                 continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            kept = cache / e["Filename"] if cache else None
+            if kept and kept.is_file() and sha256(kept) == e["SHA256"]:
+                shutil.copyfile(kept, dst)
+                continue
             body = fetch(f"{url}/{e['Filename']}")
             if body is None or hashlib.sha256(body).hexdigest() != e["SHA256"]:
                 die(f"live {suite}: {e['Filename']} is missing or does not match the index")
-            dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(body)
+            if kept:
+                kept.parent.mkdir(parents=True, exist_ok=True)
+                kept.write_bytes(body)
     return state
 
 
@@ -231,6 +246,7 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--live")
+    ap.add_argument("--cache")
     ap.add_argument("--sign", action="store_true")
     args = ap.parse_args()
 
@@ -240,7 +256,7 @@ def main():
         if not args.live:
             die("--list needs --live")
         work = pathlib.Path(tempfile.mkdtemp(prefix="assemble-"))
-        live = live_state(args.live, suites, Keyring(work), work)
+        live = live_state(args.live, suites, Keyring(work), work, packages=False)
         for s in suites:
             for e in live[s]:
                 print(s, e["Package"], e["Version"], e["Architecture"])
@@ -256,7 +272,8 @@ def main():
     work = pathlib.Path(tempfile.mkdtemp(prefix="assemble-"))
     keyring = Keyring(work)
 
-    live = live_state(args.live, suites, keyring, work) if args.live else {s: [] for s in suites}
+    cache = pathlib.Path(args.cache).resolve() if args.cache else None
+    live = live_state(args.live, suites, keyring, work, cache=cache) if args.live else {s: [] for s in suites}
 
     # suite -> {(package, version, arch): (path of the file, index stanza or None)}
     entries = {s: {} for s in suites}

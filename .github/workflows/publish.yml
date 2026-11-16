@@ -54,6 +54,15 @@ jobs:
         run: |
           python3 scripts/assemble.py --list --live "${REPO_URL}" | tee published.txt
 
+      # The published package files from earlier runs, so a run downloads
+      # from GitHub Pages only the ones it does not have (README.md, Size).
+      # assemble.py uses a cached file only when it matches the signed index.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: live-cache
+          key: live-pool-${{ hashFiles('published.txt') }}
+          restore-keys: live-pool-
+
       - name: Build and fetch the packages
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -90,12 +99,15 @@ jobs:
         name: Assemble and sign
         run: |
           set -o pipefail
-          python3 scripts/assemble.py --debs debs --out repo --live "${REPO_URL}" --sign | tee assemble.log
+          python3 scripts/assemble.py --debs debs --out repo --live "${REPO_URL}" --cache live-cache --sign | tee assemble.log
           grep -E '^changed=(true|false)$' assemble.log >> "$GITHUB_OUTPUT"
-          # The same packages valid for 5 days, and for 1 second: never
-          # deployed, only for the check that both are refused.
-          REPO_VALID_SECONDS=432000 python3 scripts/assemble.py --debs debs --out negative/short --live "${REPO_URL}" --sign > /dev/null
-          REPO_VALID_SECONDS=1 python3 scripts/assemble.py --debs debs --out negative/expired --live "${REPO_URL}" --sign > /dev/null
+          # A repository of the keyring alone valid for 5 days, and one for
+          # 1 second: never deployed, only for the check that both are
+          # refused, which comes before anything looks at the packages.
+          mkdir -p negative-debs/all
+          cp debs/all/roxora-archive-keyring_*.deb negative-debs/all/
+          REPO_VALID_SECONDS=432000 python3 scripts/assemble.py --debs negative-debs --out negative/short --sign > /dev/null
+          REPO_VALID_SECONDS=1 python3 scripts/assemble.py --debs negative-debs --out negative/expired --sign > /dev/null
           rm -rf "${GNUPGHOME}"
           find repo -type f | sort
           # GitHub Pages publishes at most 1 GB (README.md, Size).
