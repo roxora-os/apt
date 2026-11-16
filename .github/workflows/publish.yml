@@ -2,7 +2,7 @@
 # publishes it on GitHub Pages at https://roxora-os.github.io/apt.
 #
 # Runs on every push to main, by hand, every hour (to pick up new releases of
-# hwtool and of the build repository; see README.md) and on a
+# hwtool, Roxora Imager and the build repository; see README.md) and on a
 # repository_dispatch. Every run from main deploys, also when no package
 # changed: the Release files are signed again with a new Date and
 # Valid-Until (REPO_VALID_DAYS in config/repo.conf), so they do not expire

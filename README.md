@@ -32,6 +32,7 @@ earlier release builds nothing for that suite.
 | --- | --- | --- |
 | `roxora-archive-keyring` | `keys/roxora-archive-keyring.asc`, built by `packages/keyring/build.sh` | all |
 | `roxora-hwtool`, `roxora-hwtool-gtk` | the releases of [roxora-os/hwtool](https://github.com/roxora-os/hwtool), not drafts or pre-releases, from 0.3.0 on; each file checked against the SHA-256 digest GitHub reports for it (`scripts/fetch-github-releases.py`) | all |
+| `roxora-imager` | the releases of [roxora-os/imager](https://github.com/roxora-os/imager), the same way, from 0.1.9 on: its arm64 `.deb` | all |
 | `roxora-wallpapers` | [roxora-os/design](https://github.com/roxora-os/design) at the commit in `packages/wallpapers/wallpapers.conf`, every file checked against its SHA-256 there (`packages/wallpapers/build.sh`) | all |
 | `roxora-release`, `roxora-cli`, `roxora-desktop-gnome-minimal`, `roxora-desktop-gnome` | the releases of [roxora-os/build](https://github.com/roxora-os/build), not drafts or pre-releases: built at the release's tag by that tag's `userpatches/roxora/packages/build.sh` (`scripts/fetch-release-packages.sh`). Version `<release>+<Ubuntu version>`, for example `2026.11.5+24.04`. | one build per suite |
 
@@ -69,11 +70,11 @@ hand and on a `repository_dispatch` (`hwtool-release`, `build-release`):
 6. A run on `main` deploys to Pages, every time (see Valid-Until below),
    and the same containers then check the published URL.
 
-New hwtool and Roxora releases are picked up by the hourly run, so nothing
-needs to be done here for them. To publish at once, run the workflow by
-hand (Actions, Publish, Run workflow). GitHub turns off scheduled workflows
-in a repository without activity for 60 days; a push or a manual run turns
-it on again.
+New hwtool, Roxora Imager and Roxora releases are picked up by the hourly
+run, so nothing needs to be done here for them. To publish at once, run the
+workflow by hand (Actions, Publish, Run workflow). GitHub turns off
+scheduled workflows in a repository without activity for 60 days; a push or
+a manual run turns it on again.
 
 `workflow_dispatch` takes `build_ref`, a branch, tag or commit of the build
 repository whose release packages are built as well; such a run checks the

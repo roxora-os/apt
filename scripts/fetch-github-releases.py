@@ -5,7 +5,7 @@
 
     scripts/fetch-github-releases.py <output directory>
 
-For each tool in config/repo.conf (HWTOOL), takes every release of
+For each tool in config/repo.conf (HWTOOL, IMAGER), takes every release of
 <TOOL>_REPO that is neither a draft nor a pre-release and whose version is
 <TOOL>_MIN_VERSION or newer, and from each the files
 <package>_<version>_arm64.deb for every package of <TOOL>_PACKAGES. Each
@@ -24,7 +24,7 @@ import sys
 import urllib.request
 
 TOP = pathlib.Path(__file__).resolve().parent.parent
-TOOLS = ("HWTOOL",)
+TOOLS = ("HWTOOL", "IMAGER")
 
 
 def die(msg):
