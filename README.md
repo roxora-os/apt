@@ -17,9 +17,14 @@ How a system uses it, and how a system from before the repository joins it:
     roxora-archive-keyring.asc, roxora-archive-keyring.gpg
     index.html
 
-One suite per Ubuntu release, named after it: `noble` (24.04) and
-`resolute` (26.04). One component, `main`, for `arm64`; packages for all
-architectures are in the same index.
+One suite per Ubuntu release, named after it: `noble` (24.04), `resolute`
+(26.04) and `stonking` (26.10). One component, `main`, for `arm64`;
+packages for all architectures are in the same index.
+
+A new suite starts with the keyring, hwtool and the wallpapers, which go
+into every suite. Its release packages come with the first release of the
+build repository whose `boards.conf` has images for it; the script of an
+earlier release builds nothing for that suite.
 
 ## Packages
 
@@ -54,10 +59,10 @@ hand and on a `repository_dispatch` (`hwtool-release`, `build-release`):
 4. The secret key comes from the `APT_SIGNING_KEY` secret, is imported into
    a throwaway gpg home for that one step and checked to be the key of
    `config/repo.conf`.
-5. Before anything is deployed, clean `ubuntu:24.04` and `ubuntu:26.04`
-   containers on arm64 use the result as a system does
+5. Before anything is deployed, clean `ubuntu:24.04`, `ubuntu:26.04` and
+   `ubuntu:26.10` containers on arm64 use the result as a system does
    (`scripts/check-apt.sh`): `apt-get update` with every warning an error
-   (gpgv checks the signature on 24.04, Sequoia's sqv on 26.04), every
+   (gpgv checks the signature on 24.04, Sequoia's sqv from 26.04), every
    package a `roxora-*` package with its candidate from this repository,
    the keyring, hwtool and the wallpapers installed, every package resolved
    against the Ubuntu archive.

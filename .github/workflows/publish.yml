@@ -109,14 +109,14 @@ jobs:
 
   # The repository as a clean Ubuntu system sees it, before it is deployed:
   # apt-get update with the signature checked (gpgv on 24.04, Sequoia's sqv
-  # on 26.04), the packages installed or resolved.
+  # from 26.04), the packages installed or resolved.
   check:
     needs: assemble
     runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
-        image: ["ubuntu:24.04", "ubuntu:26.04"]
+        image: ["ubuntu:24.04", "ubuntu:26.04", "ubuntu:26.10"]
     container: ${{ matrix.image }}
     defaults:
       run:
@@ -184,7 +184,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ["ubuntu:24.04", "ubuntu:26.04"]
+        image: ["ubuntu:24.04", "ubuntu:26.04", "ubuntu:26.10"]
     container: ${{ matrix.image }}
     defaults:
       run:
