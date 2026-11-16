@@ -31,7 +31,7 @@ earlier release builds nothing for that suite.
 | Package | From | Suites |
 | --- | --- | --- |
 | `roxora-archive-keyring` | `keys/roxora-archive-keyring.asc`, built by `packages/keyring/build.sh` | all |
-| `roxora-hwtool`, `roxora-hwtool-gtk` | the releases of [roxora-os/hwtool](https://github.com/roxora-os/hwtool), not drafts or pre-releases, from 0.3.0 on; each file checked against the SHA-256 digest GitHub reports for it (`scripts/fetch-hwtool.py`) | all |
+| `roxora-hwtool`, `roxora-hwtool-gtk` | the releases of [roxora-os/hwtool](https://github.com/roxora-os/hwtool), not drafts or pre-releases, from 0.3.0 on; each file checked against the SHA-256 digest GitHub reports for it (`scripts/fetch-github-releases.py`) | all |
 | `roxora-wallpapers` | [roxora-os/design](https://github.com/roxora-os/design) at the commit in `packages/wallpapers/wallpapers.conf`, every file checked against its SHA-256 there (`packages/wallpapers/build.sh`) | all |
 | `roxora-release`, `roxora-cli`, `roxora-desktop-gnome-minimal`, `roxora-desktop-gnome` | the releases of [roxora-os/build](https://github.com/roxora-os/build), not drafts or pre-releases: built at the release's tag by that tag's `userpatches/roxora/packages/build.sh` (`scripts/fetch-release-packages.sh`). Version `<release>+<Ubuntu version>`, for example `2026.11.5+24.04`. | one build per suite |
 
@@ -133,7 +133,7 @@ The packages and an unsigned repository, without root:
 
     packages/keyring/build.sh debs/all
     packages/wallpapers/build.sh debs/all
-    scripts/fetch-hwtool.py debs/all
+    scripts/fetch-github-releases.py debs/all
     python3 scripts/assemble.py --debs debs --out repo
 
 ## License

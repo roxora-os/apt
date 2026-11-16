@@ -62,7 +62,7 @@ jobs:
           mkdir -p debs/all
           packages/keyring/build.sh debs/all
           packages/wallpapers/build.sh debs/all
-          scripts/fetch-hwtool.py debs/all
+          scripts/fetch-github-releases.py debs/all
           scripts/fetch-release-packages.sh debs published.txt
           if [[ -n "${BUILD_REF}" ]]; then
             scripts/fetch-release-packages.sh debs published.txt "${BUILD_REF}"
