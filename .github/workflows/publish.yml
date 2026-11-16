@@ -63,6 +63,27 @@ jobs:
           key: live-pool-${{ hashFiles('published.txt') }}
           restore-keys: live-pool-
 
+      # The roxora-imager versions the build repository's images install
+      # (IMAGER_VERSION of roxora-repo.conf, on main and at the latest
+      # release): kept whatever IMAGER_KEEP says (README.md, Size). A
+      # failure here stops the run rather than prune a version in use.
+      - name: The versions the build repository pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          build_repo="$(sed -n 's/^BUILD_REPO=//p' config/repo.conf)"
+          latest="$(gh api "repos/${build_repo}/releases/latest" --jq .tag_name)"
+          : > pins.txt
+          for ref in main "${latest}"; do
+            conf="$(curl -fsSL "https://raw.githubusercontent.com/${build_repo}/${ref}/userpatches/roxora/roxora-repo.conf")"
+            version="$(sed -n 's/^IMAGER_VERSION=//p' <<< "${conf}")"
+            echo "${ref}: IMAGER_VERSION=${version:-(none)}"
+            [[ -z "${version}" ]] || echo "roxora-imager=${version}" >> pins.txt
+          done
+          sort -u -o pins.txt pins.txt
+          cat pins.txt
+
       - name: Build and fetch the packages
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -71,7 +92,8 @@ jobs:
           mkdir -p debs/all
           packages/keyring/build.sh debs/all
           packages/wallpapers/build.sh debs/all
-          scripts/fetch-github-releases.py debs/all
+          mapfile -t pins < pins.txt
+          scripts/fetch-github-releases.py debs/all "${pins[@]}"
           scripts/fetch-release-packages.sh debs published.txt
           if [[ -n "${BUILD_REF}" ]]; then
             scripts/fetch-release-packages.sh debs published.txt "${BUILD_REF}"
@@ -99,7 +121,9 @@ jobs:
         name: Assemble and sign
         run: |
           set -o pipefail
-          python3 scripts/assemble.py --debs debs --out repo --live "${REPO_URL}" --cache live-cache --sign | tee assemble.log
+          pin_args=()
+          while read -r p; do pin_args+=(--pin "${p}"); done < pins.txt
+          python3 scripts/assemble.py --debs debs --out repo --live "${REPO_URL}" --cache live-cache "${pin_args[@]}" --sign | tee assemble.log
           grep -E '^changed=(true|false)$' assemble.log >> "$GITHUB_OUTPUT"
           # A repository of the keyring alone valid for 5 days, and one for
           # 1 second: never deployed, only for the check that both are

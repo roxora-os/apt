@@ -32,7 +32,7 @@ earlier release builds nothing for that suite.
 | --- | --- | --- |
 | `roxora-archive-keyring` | `keys/roxora-archive-keyring.asc`, built by `packages/keyring/build.sh` | all |
 | `roxora-hwtool`, `roxora-hwtool-gtk` | the releases of [roxora-os/hwtool](https://github.com/roxora-os/hwtool), not drafts or pre-releases, from 0.3.0 on; each file checked against the SHA-256 digest GitHub reports for it (`scripts/fetch-github-releases.py`) | all |
-| `roxora-imager` | the releases of [roxora-os/imager](https://github.com/roxora-os/imager), the same way, from 0.1.9 on: its arm64 `.deb` | all |
+| `roxora-imager` | the releases of [roxora-os/imager](https://github.com/roxora-os/imager), the same way, from 0.1.9 on: its arm64 `.deb`; only the newest two versions and the ones the build repository pins (see [Size](#size)) | all |
 | `roxora-wallpapers` | [roxora-os/design](https://github.com/roxora-os/design) at the commit in `packages/wallpapers/wallpapers.conf`, every file checked against its SHA-256 there (`packages/wallpapers/build.sh`) | all |
 | `roxora-release`, `roxora-cli`, `roxora-desktop-gnome-minimal`, `roxora-desktop-gnome` | the releases of [roxora-os/build](https://github.com/roxora-os/build), not drafts or pre-releases: built at the release's tag by that tag's `userpatches/roxora/packages/build.sh` (`scripts/fetch-release-packages.sh`). Version `<release>+<Ubuntu version>`, for example `2026.11.5+24.04`. | one build per suite |
 
@@ -54,7 +54,8 @@ hand and on a `repository_dispatch` (`hwtool-release`, `build-release`):
    whose name, version and architecture are published already must have
    the same content (control data, files, modes): a published version never
    changes, and a different package under the same version stops the run.
-   Nothing is ever removed. It writes the indexes with `apt-ftparchive`,
+   Nothing is removed, except older versions of `roxora-imager` (see
+   [Size](#size)). It writes the indexes with `apt-ftparchive`,
    keeps the previous indexes under `by-hash/` (Pages can serve the old
    InRelease for some minutes after a deploy), and signs each Release file
    (InRelease and Release.gpg, SHA-512 digests).
@@ -84,13 +85,34 @@ result and is never deployed.
 ## Size
 
 GitHub Pages publishes a site of at most 1 GB, with a soft limit of 100 GB
-of downloads a month. Nothing is ever removed from this repository, and
-each version of `roxora-imager` adds about 170 MB (the other packages
-together are a few MB), so it has room for about five of them. Each run
-writes the size of the repository to its log, with a warning from 700 MB
-on. Past 1 GB the deploy may fail, and if no run deploys for 10 days the
-Release files expire (see below). Before that, older versions of
-`roxora-imager` have to be removed, or its package has to get smaller.
+of downloads a month. Each version of `roxora-imager` is about 170 MB (the
+other packages together are a few MB), so this repository does not keep
+them all. It keeps:
+
+- the `IMAGER_KEEP` newest versions (`config/repo.conf`, 2), and
+- the versions the build repository pins: `IMAGER_VERSION` of
+  `userpatches/roxora/roxora-repo.conf` on its `main` branch and at its
+  latest release. Each run reads them first, and stops if it cannot.
+
+An older version leaves the pool and the indexes in the next run. Every
+other package stays forever, as before. In practice that is at most four
+imager versions, usually two: about 350 MB.
+
+What this means for the build repository:
+
+- An image built from `main` or from the latest release always finds its
+  imager version, also when that version is no longer one of the newest.
+- An image built from an older commit or an older release, whose
+  `IMAGER_VERSION` has been removed here, fails when it installs
+  `roxora-imager`: apt finds no such version. Build it with
+  `IMAGER_VERSION` set to a version this repository still has.
+- Installed systems are not affected: `apt upgrade` moves them to the
+  newest version, and a version that is gone only means it cannot be
+  installed again.
+
+Each run writes the size of the repository to its log, with a warning
+from 700 MB on. Past 1 GB the deploy may fail, and if no run deploys for
+10 days the Release files expire (see below).
 
 The hourly run itself downloads little from Pages: the published package
 files are kept in the Actions cache between runs (a cached file is used

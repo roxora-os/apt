@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Ga Hing Woo <gahing@gahingwoo.com>
 """Assemble Roxora's apt repository.
 
-    scripts/assemble.py --debs DIR --out DIR [--live URL [--cache DIR]] [--sign]
+    scripts/assemble.py --debs DIR --out DIR [--live URL [--cache DIR]] [--pin PACKAGE=VERSION]... [--sign]
     scripts/assemble.py --list --live URL
 
 --debs holds the packages built or fetched for this run: DIR/all/*.deb go
@@ -25,6 +25,13 @@ and stops; it downloads no package files.
 one run to the next, by their pool path. A file there is used when it
 matches the published index, so a run downloads only the files it does not
 have yet (GitHub Pages has a monthly download limit, see README.md).
+
+The one exception to "everything is kept": a tool of config/repo.conf with
+<TOOL>_KEEP=N keeps, of each package in <TOOL>_PACKAGES, the N newest
+versions in each suite and every version given with --pin PACKAGE=VERSION;
+older versions leave the pool and the indexes (roxora-imager, whose package
+is large; README.md, Size). The workflow pins the versions the build
+repository's images install.
 
 Every Release file is valid for REPO_VALID_DAYS (config/repo.conf) from now
 (Valid-Until). --sign signs the Release files (InRelease and Release.gpg) with the key of
@@ -240,6 +247,49 @@ def pool_path(c):
     return f"pool/main/{prefix}/{name}/{name}_{c['Version'].split(':')[-1]}_{c['Architecture']}.deb"
 
 
+def version_cmp(a, b):
+    if a == b:
+        return 0
+    return -1 if subprocess.run(["dpkg", "--compare-versions", a, "lt", b]).returncode == 0 else 1
+
+
+def keep_rules(c):
+    """{package: N} for the tools of config/repo.conf with <TOOL>_KEEP."""
+    rules = {}
+    for key, value in c.items():
+        m = re.fullmatch(r"([A-Z]+)_KEEP", key)
+        if not m:
+            continue
+        if not re.fullmatch(r"[1-9][0-9]*", value):
+            die(f"config/repo.conf: {key}={value} is not a number of versions")
+        packages = c.get(f"{m.group(1)}_PACKAGES", "").split()
+        if not packages:
+            die(f"config/repo.conf: {key} without {m.group(1)}_PACKAGES")
+        for p in packages:
+            rules[p] = int(value)
+    return rules
+
+
+def prune(entries, rules, pins):
+    """Drop, per suite, package and architecture, all but the newest N
+    versions and the pinned ones. Returns the (suite, key) pairs dropped."""
+    import functools
+    dropped = []
+    for s, ents in entries.items():
+        groups = {}
+        for key in ents:
+            if key[0] in rules:
+                groups.setdefault((key[0], key[2]), []).append(key)
+        for (pkg, _), keys in groups.items():
+            keys.sort(key=functools.cmp_to_key(lambda a, b: version_cmp(b[1], a[1])))
+            for key in keys[rules[pkg]:]:
+                if key[1] in pins.get(pkg, set()):
+                    continue
+                del ents[key]
+                dropped.append((s, key))
+    return dropped
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--debs")
@@ -247,6 +297,7 @@ def main():
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--live")
     ap.add_argument("--cache")
+    ap.add_argument("--pin", action="append", default=[])
     ap.add_argument("--sign", action="store_true")
     args = ap.parse_args()
 
@@ -302,6 +353,17 @@ def main():
                     die(f"{s}: {key[0]} {key[1]} ({key[2]}) is already "
                         f"{'published' if key in live_keys[s] else 'in this run'} with different content; give the new one a new version")
                 entries[s][key] = (deb, None)
+
+    # Only the newest versions of the packages with a _KEEP rule, and the
+    # pinned ones (README.md, Size).
+    pins = {}
+    for p in args.pin:
+        pkg, sep, version = p.partition("=")
+        if not sep or not pkg or not version:
+            die(f"--pin {p}: not PACKAGE=VERSION")
+        pins.setdefault(pkg, set()).add(version)
+    for s, key in prune(entries, keep_rules(c), pins):
+        print(f"{s}: {key[0]} {key[1]} ({key[2]}) removed, older than the {keep_rules(c)[key[0]]} newest versions and not pinned")
 
     # One file per pool path, the same in every suite that lists it.
     pool = {}
